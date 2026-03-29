@@ -295,7 +295,7 @@ div[data-testid="stTabs"] button:hover {
     border-bottom-color: #1565C0 !important;
 }
 
-/* Принудительный тёмный текст для всех полей ввода в основном контенте (исправление белого шрифта) */
+/* FIX 1: Force dark text everywhere in main content */
 .main .stTextInput input,
 .block-container .stTextInput input,
 .main .stTextInput textarea,
@@ -306,6 +306,31 @@ div[data-testid="stTabs"] button:hover {
 }
 .main .stRadio label {
     background: transparent !important;
+}
+
+/* FIX 2: Force dark text on ALL form labels and question text in tab_form */
+div[data-testid="stForm"] label,
+div[data-testid="stForm"] p,
+div[data-testid="stForm"] span,
+div[data-testid="stForm"] div,
+div[data-testid="stForm"] .stTextInput label,
+div[data-testid="stForm"] .stRadio label,
+div[data-testid="stForm"] .stRadio > div > label,
+div[data-testid="stForm"] [data-testid="stMarkdownContainer"] p,
+/* catch-all for any widget label inside the main block */
+.block-container label,
+.block-container p,
+.block-container [class*="label"],
+.main label,
+.main p {
+    color: #1A1A2E !important;
+}
+/* Override only for sidebar — keep sidebar text light */
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] div {
+    color: #D6E4FF !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -444,6 +469,8 @@ defaults = {
     "selected_situation": None,
     "form_data":          {},
     "form_step":          0,
+    # FIX: track which tab should be active
+    "active_tab":         0,
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -467,6 +494,7 @@ with st.sidebar:
         placeholder="Например: хочу открыть ИП...",
         label_visibility="collapsed",
     )
+    # FIX: Search button now sets active_tab=0 (Навигатор) and rerun
     if st.button("Найти услугу"):
         if query.strip() and BACKEND_OK:
             with st.spinner("Определяю..."):
@@ -477,6 +505,7 @@ with st.sidebar:
                 st.session_state.analysis           = None
                 st.session_state.ai_summary         = None
                 st.session_state.selected_situation = None
+                st.session_state.active_tab         = 0   # switch to Navigator tab
                 st.query_params.tab = "nav"
                 st.rerun()
             else:
@@ -516,11 +545,13 @@ with st.sidebar:
         for sid in SERVICES:
             node = G.nodes.get(sid, {})
             name = node.get("name", SERVICES[sid])
+            # FIX: service buttons now also switch to Navigator tab (active_tab=0)
             if st.button(name, key=f"svc_{sid}", use_container_width=True):
                 st.session_state.selected_service   = sid
                 st.session_state.analysis           = None
                 st.session_state.ai_summary         = None
                 st.session_state.selected_situation = None
+                st.session_state.active_tab         = 0   # switch to Navigator tab
                 st.query_params.tab = "nav"
                 st.rerun()
 
@@ -531,6 +562,8 @@ if not BACKEND_OK:
 if "tab" not in st.query_params:
     st.query_params.tab = "nav"
 
+# Use default_value to switch to Navigator tab when a service is selected from sidebar
+_tab_index = st.session_state.get("active_tab", 0)
 tab_nav, tab_chat, tab_form, tab_about = st.tabs(["Навигатор", "Чат-помощник", "Заполнить заявление", "О проекте"])
 
 with tab_nav:
@@ -629,6 +662,7 @@ with tab_nav:
                         st.session_state.analysis           = None
                         st.session_state.ai_summary         = None
                         st.session_state.selected_situation = None
+                        st.session_state.active_tab         = 0
                         st.query_params.tab = "nav"
                         st.rerun()
 
@@ -824,10 +858,31 @@ with tab_form:
     </div>
     """, unsafe_allow_html=True)
 
-    # Дополнительный стиль для этой вкладки (гарантия чёрного текста)
+    # FIX 3: Aggressive dark-text override specifically for the form tab
     st.markdown("""
     <style>
-    div[data-testid="stTextInput"] input, div[data-testid="stRadio"] label {
+    /* Target every text element inside the form tab context */
+    div[data-testid="stVerticalBlock"] label,
+    div[data-testid="stVerticalBlock"] p,
+    div[data-testid="stVerticalBlock"] span:not([class*="badge"]):not([class*="chip"]),
+    div[data-testid="stForm"] label,
+    div[data-testid="stForm"] p,
+    div[data-testid="stForm"] span,
+    div[data-testid="stForm"] div[data-testid="stMarkdownContainer"],
+    div[data-testid="stForm"] div[data-testid="stMarkdownContainer"] p,
+    div[data-testid="stRadio"] label,
+    div[data-testid="stRadio"] div,
+    div[data-testid="stRadio"] p,
+    div[data-testid="stRadio"] span,
+    /* Streamlit stores question text in these containers */
+    .stTextInput label,
+    .stTextInput > div > label,
+    .stRadio > label,
+    .stRadio > div > label,
+    .stMarkdownContainer p,
+    /* Catch-all for any white text */
+    .element-container label,
+    .element-container p {
         color: #1A1A2E !important;
     }
     </style>
@@ -851,12 +906,38 @@ with tab_form:
         field = form_fields[st.session_state.form_step]
         key = field["key"]
         question = field["question"]
+
+        # Progress indicator
+        progress_pct = int(st.session_state.form_step / len(form_fields) * 100)
+        st.markdown(f"""
+        <div style="margin-bottom:20px;">
+            <div style="font-size:0.7rem;color:#78909C;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;">
+                Шаг {st.session_state.form_step + 1} из {len(form_fields)}
+            </div>
+            <div style="background:#DDE3EE;border-radius:4px;height:4px;">
+                <div style="width:{progress_pct}%;background:#1565C0;height:4px;border-radius:4px;"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Render the question label explicitly in dark color ABOVE the form
+        st.markdown(f'<div style="font-size:0.95rem;font-weight:600;color:#1A1A2E;margin-bottom:8px;">{question}</div>', unsafe_allow_html=True)
+
         with st.form(key=f"form_step_{st.session_state.form_step}"):
             if field["type"] == "text":
-                value = st.text_input(question, placeholder=field["placeholder"])
+                value = st.text_input(
+                    question,
+                    placeholder=field["placeholder"],
+                    label_visibility="hidden",  # hide duplicate label, we rendered it above
+                )
             else:
-                value = st.radio(question, ["да", "нет"], index=0) == "да"
-            submitted = st.form_submit_button("Далее")
+                value = st.radio(
+                    question,
+                    ["да", "нет"],
+                    index=0,
+                    label_visibility="hidden",
+                ) == "да"
+            submitted = st.form_submit_button("Далее →")
             if submitted:
                 st.session_state.form_data[key] = value
                 st.session_state.form_step += 1
