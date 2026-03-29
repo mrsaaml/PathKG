@@ -294,6 +294,19 @@ div[data-testid="stTabs"] button:hover {
     color: #1565C0 !important;
     border-bottom-color: #1565C0 !important;
 }
+
+/* Принудительный тёмный текст для всех полей ввода в основном контенте (исправление белого шрифта) */
+.main .stTextInput input,
+.block-container .stTextInput input,
+.main .stTextInput textarea,
+.block-container .stTextInput textarea,
+.main .stRadio label,
+.block-container .stRadio label {
+    color: #1A1A2E !important;
+}
+.main .stRadio label {
+    background: transparent !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -809,6 +822,15 @@ with tab_form:
     <div style="font-size:0.83rem;color:#546E7A;margin-bottom:20px;border-bottom:2px solid #C9A84C;padding-bottom:12px;">
         Я задам несколько вопросов, чтобы сформировать готовое заявление в PDF.
     </div>
+    """, unsafe_allow_html=True)
+
+    # Дополнительный стиль для этой вкладки (гарантия чёрного текста)
+    st.markdown("""
+    <style>
+    div[data-testid="stTextInput"] input, div[data-testid="stRadio"] label {
+        color: #1A1A2E !important;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
     form_fields = [
